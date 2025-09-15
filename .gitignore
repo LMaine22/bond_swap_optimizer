@@ -7,6 +7,11 @@ runs/
 *.xls
 *.parquet
 
+# Specific files to ignore
+filtered_out.csv
+filtered_out_bonds.csv
+streamlit_app.py
+
 # Python
 __pycache__/
 *.py[cod]
