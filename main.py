@@ -4,10 +4,19 @@ import random
 import argparse
 import json
 from datetime import datetime
+import warnings
+
+# Suppress warnings for cleaner console output
+warnings.filterwarnings('ignore', category=FutureWarning)
+warnings.filterwarnings('ignore', category=UserWarning)
+warnings.filterwarnings('ignore', category=DeprecationWarning)
 
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
+
+# Set pandas options to suppress specific warnings
+pd.set_option('future.no_silent_downcasting', True)
 
 from src.config import (
     PORTFOLIO_FILE_PATH,

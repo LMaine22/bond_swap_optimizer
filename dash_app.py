@@ -13,6 +13,16 @@ import base64
 from datetime import datetime
 import threading
 import time
+import warnings
+
+# Suppress warnings for cleaner console output
+warnings.filterwarnings('ignore', category=FutureWarning)
+warnings.filterwarnings('ignore', category=UserWarning)
+warnings.filterwarnings('ignore', category=DeprecationWarning)
+
+# Set pandas options to suppress specific warnings
+pd.set_option('future.no_silent_downcasting', True)
+import traceback
 
 # Import your existing modules
 from src.config import SCENARIO_PRESETS, switch_scenario
@@ -21,10 +31,278 @@ from src.genetic_algorithm import evolve_nsga
 from src.pruning import prune_passengers, compute_metrics
 from src.tr_engine import compute_simple_tr_analysis
 
-# Initialize Dash app
-app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP, dbc.icons.BOOTSTRAP],
-                suppress_callback_exceptions=True)
-app.title = "Bond Swap Optimizer"
+# Custom dark theme CSS
+CUSTOM_CSS = """
+/* Dark Financial Theme */
+body {
+    background-color: #0f1419 !important;
+    color: #ffffff !important;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+}
+
+/* Main container */
+.container-fluid {
+    background-color: #0f1419 !important;
+    min-height: 100vh;
+}
+
+/* Cards */
+.card {
+    background-color: #1a1f2e !important;
+    border: 1px solid #2d3748 !important;
+    border-radius: 12px !important;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3) !important;
+}
+
+.card-header {
+    background-color: #2d3748 !important;
+    border-bottom: 1px solid #4a5568 !important;
+    color: #ffffff !important;
+    font-weight: 600 !important;
+}
+
+.card-body {
+    background-color: #1a1f2e !important;
+    color: #e2e8f0 !important;
+}
+
+/* Buttons */
+.btn-primary {
+    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) !important;
+    border: none !important;
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+    transition: all 0.3s ease !important;
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%) !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 6px 12px rgba(59, 130, 246, 0.3) !important;
+}
+
+.btn-primary:disabled {
+    background: #374151 !important;
+    color: #9ca3af !important;
+}
+
+/* Upload area */
+.upload-area {
+    border: 2px dashed #4a5568 !important;
+    border-radius: 12px !important;
+    background: linear-gradient(135deg, #1a1f2e 0%, #2d3748 100%) !important;
+    transition: all 0.3s ease !important;
+}
+
+.upload-area:hover {
+    border-color: #3b82f6 !important;
+    background: linear-gradient(135deg, #2d3748 0%, #374151 100%) !important;
+}
+
+/* Form controls */
+.form-control, .form-select {
+    background-color: #2d3748 !important;
+    border: 1px solid #4a5568 !important;
+    color: #ffffff !important;
+    border-radius: 8px !important;
+}
+
+.form-control:focus, .form-select:focus {
+    background-color: #374151 !important;
+    border-color: #3b82f6 !important;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+    color: #ffffff !important;
+}
+
+/* Dropdowns */
+.Select-control {
+    background-color: #2d3748 !important;
+    border: 1px solid #4a5568 !important;
+    color: #ffffff !important;
+}
+
+/* Alerts */
+.alert-success {
+    background-color: #065f46 !important;
+    border-color: #059669 !important;
+    color: #d1fae5 !important;
+}
+
+.alert-danger {
+    background-color: #7f1d1d !important;
+    border-color: #dc2626 !important;
+    color: #fecaca !important;
+}
+
+.alert-warning {
+    background-color: #78350f !important;
+    border-color: #f59e0b !important;
+    color: #fef3c7 !important;
+}
+
+.alert-info {
+    background-color: #1e3a8a !important;
+    border-color: #3b82f6 !important;
+    color: #dbeafe !important;
+}
+
+/* Tables */
+.dash-table-container {
+    background-color: #1a1f2e !important;
+    color: #ffffff !important;
+}
+
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner table {
+    background-color: #1a1f2e !important;
+    color: #ffffff !important;
+}
+
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner th {
+    background-color: #2d3748 !important;
+    color: #ffffff !important;
+    border: 1px solid #4a5568 !important;
+}
+
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner td {
+    background-color: #1a1f2e !important;
+    color: #e2e8f0 !important;
+    border: 1px solid #374151 !important;
+}
+
+/* Badges */
+.badge {
+    border-radius: 6px !important;
+    font-weight: 500 !important;
+}
+
+.badge.bg-info {
+    background-color: #3b82f6 !important;
+}
+
+.badge.bg-success {
+    background-color: #10b981 !important;
+}
+
+.badge.bg-warning {
+    background-color: #f59e0b !important;
+}
+
+/* Tabs */
+.nav-tabs {
+    border-bottom: 1px solid #4a5568 !important;
+}
+
+.nav-tabs .nav-link {
+    background-color: #2d3748 !important;
+    border: 1px solid #4a5568 !important;
+    color: #e2e8f0 !important;
+}
+
+.nav-tabs .nav-link.active {
+    background-color: #3b82f6 !important;
+    border-color: #3b82f6 !important;
+    color: #ffffff !important;
+}
+
+/* Metrics cards */
+.metric-card {
+    background: linear-gradient(135deg, #1a1f2e 0%, #2d3748 100%) !important;
+    border: 1px solid #374151 !important;
+    border-radius: 12px !important;
+    padding: 1.5rem !important;
+    text-align: center !important;
+    transition: all 0.3s ease !important;
+}
+
+.metric-card:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3) !important;
+}
+
+.metric-value {
+    font-size: 1.75rem !important;
+    font-weight: 700 !important;
+    margin-bottom: 0.5rem !important;
+}
+
+.metric-label {
+    font-size: 0.875rem !important;
+    color: #9ca3af !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.05em !important;
+}
+
+/* Progress indicators */
+.progress {
+    background-color: #374151 !important;
+    border-radius: 8px !important;
+}
+
+.progress-bar {
+    background: linear-gradient(90deg, #3b82f6 0%, #1d4ed8 100%) !important;
+}
+
+/* Icons */
+.bi {
+    margin-right: 0.5rem !important;
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+    width: 8px !important;
+    height: 8px !important;
+}
+
+::-webkit-scrollbar-track {
+    background: #1a1f2e !important;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #4a5568 !important;
+    border-radius: 4px !important;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #6b7280 !important;
+}
+"""
+
+# Initialize Dash app with custom theme
+app = dash.Dash(
+    __name__,
+    external_stylesheets=[
+        dbc.themes.BOOTSTRAP,
+        dbc.icons.BOOTSTRAP,
+        "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+    ],
+    suppress_callback_exceptions=True
+)
+
+app.title = "Bond Swap Optimizer Pro"
+
+# Inject custom CSS via index_string
+app.index_string = f'''
+<!DOCTYPE html>
+<html>
+    <head>
+        {{%metas%}}
+        <title>{{%title%}}</title>
+        {{%favicon%}}
+        {{%css%}}
+        <style>
+        {CUSTOM_CSS}
+        </style>
+    </head>
+    <body>
+        {{%app_entry%}}
+        <footer>
+            {{%config%}}
+            {{%scripts%}}
+            {{%renderer%}}
+        </footer>
+    </body>
+</html>
+'''
 
 # Global variables for storing data
 portfolio_data = None
@@ -48,44 +326,70 @@ def format_percent(value):
         return "0.00%"
 
 
+def create_header():
+    """Create the main header"""
+    return dbc.Row([
+        dbc.Col([
+            html.Div([
+                html.H1([
+                    html.I(className="bi bi-graph-up-arrow me-3", style={'color': '#3b82f6'}),
+                    "Bond Swap Optimizer Pro"
+                ], className="text-center mb-2", style={'color': '#ffffff', 'font-weight': '700'}),
+                html.P(
+                    "Professional bond portfolio optimization and analysis platform",
+                    className="text-center",
+                    style={'color': '#9ca3af', 'font-size': '1.1rem', 'margin-bottom': '2rem'}
+                )
+            ])
+        ])
+    ])
+
+
 def create_scenario_controls():
     """Create scenario selection and parameter controls"""
     return dbc.Card([
         dbc.CardHeader([
-            html.H4("Scenario Configuration", className="mb-0"),
-            dbc.Badge("Configure your swap parameters", color="info", className="ms-2")
+            html.H4([
+                html.I(className="bi bi-sliders2"),
+                "Scenario Configuration"
+            ], className="mb-0", style={'color': '#ffffff'}),
+            dbc.Badge("Configure swap parameters", color="info", className="ms-2")
         ]),
         dbc.CardBody([
             # Scenario selection
-            html.Label("Scenario Type", className="form-label fw-bold"),
+            html.Label("Scenario Type", className="form-label fw-bold mb-2", style={'color': '#e2e8f0'}),
             dcc.Dropdown(
                 id='scenario-dropdown',
                 options=[
-                    {'label': 'Tax Loss Harvesting', 'value': 'tax_loss'},
-                    {'label': 'Conservative Swap', 'value': 'conservative'},
-                    {'label': 'Yield Cleanup', 'value': 'yield_cleanup'},
-                    {'label': 'Custom Configuration', 'value': 'custom'}
+                    {'label': '🏛️ Tax Loss Harvesting', 'value': 'tax_loss'},
+                    {'label': '🛡️ Conservative Swap', 'value': 'conservative'},
+                    {'label': '🧹 Yield Cleanup', 'value': 'yield_cleanup'},
+                    {'label': '⚙️ Custom Configuration', 'value': 'custom'}
                 ],
                 value='yield_cleanup',
-                className="mb-3"
+                className="mb-3",
+                style={
+                    'backgroundColor': '#2d3748',
+                    'color': '#ffffff'
+                }
             ),
 
             # Scenario description
-            html.Div(id='scenario-description', className="alert alert-info mb-3"),
+            html.Div(id='scenario-description', className="mb-3"),
 
             # Collapsible custom parameters
             dbc.Collapse([
-                html.Hr(),
-                html.H5("Custom Parameters", className="text-primary"),
+                html.Hr(style={'border-color': '#4a5568'}),
+                html.H5("Custom Parameters", style={'color': '#3b82f6'}),
 
                 # Swap size
                 dbc.Row([
                     dbc.Col([
-                        html.Label("Min Swap Size ($)", className="form-label"),
+                        html.Label("Min Swap Size ($)", className="form-label", style={'color': '#e2e8f0'}),
                         dbc.Input(id='min-swap-size', type='number', value=7500000, step=500000)
                     ], md=6),
                     dbc.Col([
-                        html.Label("Max Swap Size ($)", className="form-label"),
+                        html.Label("Max Swap Size ($)", className="form-label", style={'color': '#e2e8f0'}),
                         dbc.Input(id='max-swap-size', type='number', value=100000000, step=1000000)
                     ], md=6)
                 ], className="mb-3"),
@@ -93,11 +397,11 @@ def create_scenario_controls():
                 # Loss constraints
                 dbc.Row([
                     dbc.Col([
-                        html.Label("Min Loss ($)", className="form-label"),
+                        html.Label("Min Loss ($)", className="form-label", style={'color': '#e2e8f0'}),
                         dbc.Input(id='min-loss', type='number', value=0, step=50000)
                     ], md=6),
                     dbc.Col([
-                        html.Label("Max Loss ($)", className="form-label"),
+                        html.Label("Max Loss ($)", className="form-label", style={'color': '#e2e8f0'}),
                         dbc.Input(id='max-loss', type='number', value=750000, step=100000)
                     ], md=6)
                 ], className="mb-3"),
@@ -105,11 +409,11 @@ def create_scenario_controls():
                 # Recovery period
                 dbc.Row([
                     dbc.Col([
-                        html.Label("Min Recovery (months)", className="form-label"),
+                        html.Label("Min Recovery (months)", className="form-label", style={'color': '#e2e8f0'}),
                         dbc.Input(id='min-recovery', type='number', value=0.0, step=0.5)
                     ], md=6),
                     dbc.Col([
-                        html.Label("Max Recovery (months)", className="form-label"),
+                        html.Label("Max Recovery (months)", className="form-label", style={'color': '#e2e8f0'}),
                         dbc.Input(id='max-recovery', type='number', value=18.0, step=1.0)
                     ], md=6)
                 ], className="mb-3"),
@@ -117,15 +421,15 @@ def create_scenario_controls():
                 # Yield constraints
                 dbc.Row([
                     dbc.Col([
-                        html.Label("Target Buy Yield (%)", className="form-label"),
+                        html.Label("Target Buy Yield (%)", className="form-label", style={'color': '#e2e8f0'}),
                         dbc.Input(id='target-buy-yield', type='number', value=5.5, step=0.1)
                     ], md=4),
                     dbc.Col([
-                        html.Label("Min Sold Yield (%)", className="form-label"),
+                        html.Label("Min Sold Yield (%)", className="form-label", style={'color': '#e2e8f0'}),
                         dbc.Input(id='min-sold-yield', type='number', value=1.5, step=0.1)
                     ], md=4),
                     dbc.Col([
-                        html.Label("Max Sold Yield (%)", className="form-label"),
+                        html.Label("Max Sold Yield (%)", className="form-label", style={'color': '#e2e8f0'}),
                         dbc.Input(id='max-sold-yield', type='number', value=4.0, step=0.1)
                     ], md=4)
                 ], className="mb-3"),
@@ -133,7 +437,7 @@ def create_scenario_controls():
                 # Additional constraints
                 dbc.Row([
                     dbc.Col([
-                        html.Label("Max Individual Bond Yield (%)", className="form-label"),
+                        html.Label("Max Individual Bond Yield (%)", className="form-label", style={'color': '#e2e8f0'}),
                         dbc.Input(id='max-individual-yield', type='number', value=5.0, step=0.1)
                     ], md=6),
                     dbc.Col([
@@ -141,7 +445,8 @@ def create_scenario_controls():
                             id='enforce-min-loss',
                             options=[{'label': ' Enforce Minimum Loss (tax swaps)', 'value': 'enforce'}],
                             value=[],
-                            className="mt-4"
+                            className="mt-4",
+                            style={'color': '#e2e8f0'}
                         )
                     ], md=6)
                 ])
@@ -154,31 +459,24 @@ def create_file_upload():
     """Create file upload area"""
     return dbc.Card([
         dbc.CardHeader([
-            html.H4("Portfolio Upload", className="mb-0"),
-            dbc.Badge("Upload your bond portfolio data", color="success", className="ms-2")
+            html.H4([
+                html.I(className="bi bi-cloud-upload"),
+                "Portfolio Upload"
+            ], className="mb-0", style={'color': '#ffffff'}),
+            dbc.Badge("Upload bond portfolio data", color="success", className="ms-2")
         ]),
         dbc.CardBody([
             dcc.Upload(
                 id='upload-data',
                 children=html.Div([
-                    html.I(className="bi bi-cloud-upload-fill me-2", style={'font-size': '2rem'}),
+                    html.I(className="bi bi-cloud-upload-fill", style={'font-size': '3rem', 'color': '#3b82f6'}),
                     html.Div([
-                        html.H5("Drag and Drop or Click to Select Files"),
-                        html.P("Supports .parquet, .xlsx, .xls files", className="text-muted mb-0")
+                        html.H5("Drag and Drop or Click to Select Files",
+                                style={'color': '#ffffff', 'margin-top': '1rem'}),
+                        html.P("Supports .parquet, .xlsx, .xls files", style={'color': '#9ca3af', 'margin-bottom': '0'})
                     ])
-                ], className="text-center"),
-                style={
-                    'width': '100%',
-                    'height': '120px',
-                    'lineHeight': '120px',
-                    'borderWidth': '2px',
-                    'borderStyle': 'dashed',
-                    'borderRadius': '10px',
-                    'textAlign': 'center',
-                    'margin': '10px',
-                    'cursor': 'pointer'
-                },
-                className="border-primary",
+                ], className="text-center upload-area", style={'padding': '2rem'}),
+                className="mb-3",
                 multiple=False
             ),
             html.Div(id='upload-status', className="mt-3")
@@ -190,18 +488,25 @@ def create_optimization_controls():
     """Create optimization trigger and progress"""
     return dbc.Card([
         dbc.CardHeader([
-            html.H4("Run Optimization", className="mb-0"),
+            html.H4([
+                html.I(className="bi bi-cpu"),
+                "Run Optimization"
+            ], className="mb-0", style={'color': '#ffffff'}),
             dbc.Badge("Find optimal bond swaps", color="warning", className="ms-2")
         ]),
         dbc.CardBody([
             html.Div(id='portfolio-summary', className="mb-3"),
             dbc.Button(
-                "Find Optimal Swaps",
+                [
+                    html.I(className="bi bi-play-fill me-2"),
+                    "Find Optimal Swaps"
+                ],
                 id='run-optimization',
                 color="primary",
                 size="lg",
                 className="w-100 mb-3",
-                disabled=True
+                disabled=True,
+                style={'font-weight': '600'}
             ),
             html.Div(id='optimization-progress'),
             html.Div(id='optimization-status')
@@ -214,7 +519,10 @@ def create_results_section():
     return html.Div([
         dbc.Card([
             dbc.CardHeader([
-                html.H4("Optimization Results", className="mb-0"),
+                html.H4([
+                    html.I(className="bi bi-graph-up"),
+                    "Optimization Results"
+                ], className="mb-0", style={'color': '#ffffff'}),
                 dbc.Badge(id="results-badge", color="success", className="ms-2")
             ]),
             dbc.CardBody([
@@ -223,10 +531,10 @@ def create_results_section():
 
                 # Tabs for different views
                 dbc.Tabs([
-                    dbc.Tab(label="All Options", tab_id="all-options"),
-                    dbc.Tab(label="Option Details", tab_id="option-details"),
-                    dbc.Tab(label="Analysis Charts", tab_id="charts"),
-                    dbc.Tab(label="Downloads", tab_id="downloads")
+                    dbc.Tab(label="📊 All Options", tab_id="all-options"),
+                    dbc.Tab(label="🔍 Option Details", tab_id="option-details"),
+                    dbc.Tab(label="📈 Analysis Charts", tab_id="charts"),
+                    dbc.Tab(label="💾 Downloads", tab_id="downloads")
                 ], id="results-tabs", active_tab="all-options"),
 
                 html.Div(id='results-content', className="mt-4")
@@ -236,36 +544,34 @@ def create_results_section():
 
 
 # Main layout
-app.layout = dbc.Container([
+app.layout = html.Div([
+    # Data stores
     dcc.Store(id='portfolio-store'),
     dcc.Store(id='results-store'),
     dcc.Store(id='scenario-store'),
     dcc.Interval(id='optimization-interval', interval=1000, disabled=True),
 
-    # Header
-    dbc.Row([
-        dbc.Col([
-            html.H1("Bond Swap Optimizer", className="text-center text-primary mb-0"),
-            html.P("Professional bond portfolio optimization and analysis",
-                   className="text-center text-muted mb-4")
+    # Main container
+    dbc.Container([
+        # Header
+        create_header(),
+
+        # Main content
+        dbc.Row([
+            # Sidebar
+            dbc.Col([
+                create_scenario_controls(),
+                create_file_upload(),
+                create_optimization_controls()
+            ], md=4),
+
+            # Main content area
+            dbc.Col([
+                create_results_section()
+            ], md=8)
         ])
-    ]),
-
-    # Main content
-    dbc.Row([
-        # Sidebar
-        dbc.Col([
-            create_scenario_controls(),
-            create_file_upload(),
-            create_optimization_controls()
-        ], md=4),
-
-        # Main content area
-        dbc.Col([
-            create_results_section()
-        ], md=8)
-    ])
-], fluid=True, className="py-4")
+    ], fluid=True, className="py-4")
+], style={'backgroundColor': '#0f1419', 'minHeight': '100vh'})
 
 
 # Callbacks
@@ -294,10 +600,13 @@ def update_scenario_config(scenario_type):
     config = SCENARIO_PRESETS[scenario_type]
     is_custom = scenario_type == 'custom'
 
-    description = html.Div([
-        html.Strong(f"{scenario_type.replace('_', ' ').title()} Scenario"),
-        html.P(config['description'], className="mb-0 mt-2")
-    ])
+    description = dbc.Alert([
+        html.H6(f"{scenario_type.replace('_', ' ').title()} Scenario", className="mb-2", style={'color': '#ffffff'}),
+        html.P(config['description'], className="mb-0", style={'color': '#e2e8f0'})
+    ], color="info", className="border-0", style={
+        'backgroundColor': '#1e3a8a',
+        'borderLeft': '4px solid #3b82f6'
+    })
 
     enforce_value = ['enforce'] if config['enforce_min_loss'] else []
 
@@ -336,7 +645,7 @@ def handle_file_upload(contents, filename):
 
         # Save to temporary file
         suffix = '.parquet' if filename.endswith('.parquet') else '.xlsx'
-        
+
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp_file:
             tmp_file.write(decoded)
             tmp_path = tmp_file.name
@@ -353,7 +662,7 @@ def handle_file_upload(contents, filename):
                 html.I(className="bi bi-check-circle-fill me-2"),
                 html.Strong("Success! "),
                 f"Loaded {len(portfolio_df)} bonds, Total Value: {format_currency(portfolio_df['market'].sum())}"
-            ], color="success")
+            ], color="success", className="border-0")
 
             return portfolio_json, status, False
         else:
@@ -361,7 +670,7 @@ def handle_file_upload(contents, filename):
                 html.I(className="bi bi-exclamation-triangle-fill me-2"),
                 html.Strong("Error! "),
                 "Could not load portfolio data"
-            ], color="danger")
+            ], color="danger", className="border-0")
             return None, status, True
 
     except Exception as e:
@@ -369,7 +678,7 @@ def handle_file_upload(contents, filename):
             html.I(className="bi bi-exclamation-triangle-fill me-2"),
             html.Strong("Error! "),
             f"Failed to process file: {str(e)}"
-        ], color="danger")
+        ], color="danger", className="border-0")
         return None, status, True
 
 
@@ -387,20 +696,28 @@ def update_portfolio_summary(portfolio_json):
 
         return dbc.Row([
             dbc.Col([
-                html.H6("Total Bonds", className="text-muted mb-1"),
-                html.H4(f"{len(portfolio_df)}", className="text-primary")
+                html.Div([
+                    html.H4(f"{len(portfolio_df)}", className="metric-value", style={'color': '#3b82f6'}),
+                    html.P("Total Bonds", className="metric-label")
+                ], className="metric-card")
             ], md=4),
             dbc.Col([
-                html.H6("Market Value", className="text-muted mb-1"),
-                html.H4(format_currency(portfolio_df['market'].sum()), className="text-success")
+                html.Div([
+                    html.H4(format_currency(portfolio_df['market'].sum()), className="metric-value",
+                            style={'color': '#10b981'}),
+                    html.P("Market Value", className="metric-label")
+                ], className="metric-card")
             ], md=4),
             dbc.Col([
-                html.H6("Par Value", className="text-muted mb-1"),
-                html.H4(format_currency(portfolio_df['par'].sum()), className="text-info")
+                html.Div([
+                    html.H4(format_currency(portfolio_df['par'].sum()), className="metric-value",
+                            style={'color': '#f59e0b'}),
+                    html.P("Par Value", className="metric-label")
+                ], className="metric-card")
             ], md=4)
         ])
-    except:
-        return ""
+    except Exception as e:
+        return dbc.Alert(f"Error displaying portfolio summary: {str(e)}", color="warning")
 
 
 @app.callback(
@@ -449,19 +766,43 @@ def run_optimization(n_clicks, portfolio_json, scenario_type, min_swap, max_swap
         config.MAX_INDIVIDUAL_BOND_YIELD = max_individual_yield / 100.0
         config.ENFORCE_MIN_SWAP_LOSS = 'enforce' in (enforce_min_loss or [])
 
+        # Show progress
+        progress = html.Div([
+            dbc.Progress(value=25, className="mb-2"),
+            html.P("Filtering eligible bonds...", style={'color': '#e2e8f0'})
+        ])
+
         # Filter bonds
         bond_candidates_df = pre_filter_bonds(portfolio_df)
 
         if bond_candidates_df.empty:
-            status = dbc.Alert("No eligible bonds after filtering", color="warning")
+            status = dbc.Alert([
+                html.I(className="bi bi-exclamation-triangle-fill me-2"),
+                "No eligible bonds after filtering"
+            ], color="warning", className="border-0")
             return None, status, True, {'display': 'none'}
+
+        # Update progress
+        progress = html.Div([
+            dbc.Progress(value=50, className="mb-2"),
+            html.P("Running genetic algorithm optimization...", style={'color': '#e2e8f0'})
+        ])
 
         # Run optimization
         pareto_raw = evolve_nsga(bond_candidates_df)
 
         if not pareto_raw:
-            status = dbc.Alert("No feasible solutions found", color="danger")
+            status = dbc.Alert([
+                html.I(className="bi bi-exclamation-triangle-fill me-2"),
+                "No feasible solutions found"
+            ], color="danger", className="border-0")
             return None, status, True, {'display': 'none'}
+
+        # Update progress
+        progress = html.Div([
+            dbc.Progress(value=75, className="mb-2"),
+            html.P("Processing and pruning solutions...", style={'color': '#e2e8f0'})
+        ])
 
         # Process results
         results = []
@@ -500,30 +841,43 @@ def run_optimization(n_clicks, portfolio_json, scenario_type, min_swap, max_swap
                         },
                         "selected_bonds": selected_bonds.to_json(date_format='iso', orient='split')
                     })
-            except:
+            except Exception as e:
+                print(f"Error processing option {i}: {e}")
                 continue
 
         if not results:
-            status = dbc.Alert("No feasible solutions after processing", color="warning")
+            status = dbc.Alert([
+                html.I(className="bi bi-exclamation-triangle-fill me-2"),
+                "No feasible solutions after processing"
+            ], color="warning", className="border-0")
             return None, status, True, {'display': 'none'}
 
         # Sort by delta income
         results.sort(key=lambda x: (-x["metrics"]["delta_income"], x["metrics"]["recovery_months"]))
 
+        # Final progress
+        progress = html.Div([
+            dbc.Progress(value=100, className="mb-2"),
+            html.P("Optimization complete!", style={'color': '#e2e8f0'})
+        ])
+
         status = dbc.Alert([
             html.I(className="bi bi-check-circle-fill me-2"),
             html.Strong("Optimization Complete! "),
             f"Found {len(results)} unique solutions"
-        ], color="success")
+        ], color="success", className="border-0")
 
         return results, status, True, {'display': 'block'}
 
     except Exception as e:
+        error_msg = str(e)
+        traceback.print_exc()  # Print full traceback to console for debugging
+
         status = dbc.Alert([
             html.I(className="bi bi-exclamation-triangle-fill me-2"),
             html.Strong("Error! "),
-            f"Optimization failed: {str(e)}"
-        ], color="danger")
+            f"Optimization failed: {error_msg}"
+        ], color="danger", className="border-0")
         return None, status, True, {'display': 'none'}
 
 
@@ -543,20 +897,28 @@ def update_results_summary(results):
 
     summary = dbc.Row([
         dbc.Col([
-            html.H6("Total Options", className="text-muted mb-1"),
-            html.H4(f"{len(results)}", className="text-primary")
+            html.Div([
+                html.H4(f"{len(results)}", className="metric-value", style={'color': '#3b82f6'}),
+                html.P("Total Options", className="metric-label")
+            ], className="metric-card")
         ], md=3),
         dbc.Col([
-            html.H6("Best Δ-Income", className="text-muted mb-1"),
-            html.H4(format_currency(best_income), className="text-success")
+            html.Div([
+                html.H4(format_currency(best_income), className="metric-value", style={'color': '#10b981'}),
+                html.P("Best Δ-Income", className="metric-label")
+            ], className="metric-card")
         ], md=3),
         dbc.Col([
-            html.H6("Avg Recovery", className="text-muted mb-1"),
-            html.H4(f"{avg_recovery:.1f} months", className="text-info")
+            html.Div([
+                html.H4(f"{avg_recovery:.1f} mo", className="metric-value", style={'color': '#60a5fa'}),
+                html.P("Avg Recovery", className="metric-label")
+            ], className="metric-card")
         ], md=3),
         dbc.Col([
-            html.H6("Avg Size", className="text-muted mb-1"),
-            html.H4(format_currency(avg_size), className="text-warning")
+            html.Div([
+                html.H4(format_currency(avg_size), className="metric-value", style={'color': '#f59e0b'}),
+                html.P("Avg Size", className="metric-label")
+            ], className="metric-card")
         ], md=3)
     ])
 
@@ -610,13 +972,24 @@ def create_options_table(results):
     return dash_table.DataTable(
         data=table_data,
         columns=[{"name": col, "id": col} for col in table_data[0].keys()],
-        style_cell={'textAlign': 'left', 'padding': '12px'},
-        style_header={'backgroundColor': 'rgb(230, 230, 230)', 'fontWeight': 'bold'},
+        style_cell={
+            'textAlign': 'left',
+            'padding': '12px',
+            'backgroundColor': '#1a1f2e',
+            'color': '#e2e8f0',
+            'border': '1px solid #374151'
+        },
+        style_header={
+            'backgroundColor': '#2d3748',
+            'fontWeight': 'bold',
+            'color': '#ffffff',
+            'border': '1px solid #4a5568'
+        },
         style_data_conditional=[
             {
                 'if': {'row_index': 0},
-                'backgroundColor': '#d4edda',
-                'color': 'black',
+                'backgroundColor': '#065f46',
+                'color': '#ffffff',
             }
         ],
         page_size=15,
@@ -633,7 +1006,7 @@ def create_option_details(results):
     return html.Div([
         dbc.Row([
             dbc.Col([
-                html.Label("Select Option for Details:", className="form-label"),
+                html.Label("Select Option for Details:", className="form-label", style={'color': '#e2e8f0'}),
                 dcc.Dropdown(
                     id='option-selector',
                     options=[{'label': r["option_id"], 'value': i} for i, r in enumerate(results)],
@@ -675,7 +1048,13 @@ def create_analysis_charts(results):
         title="Risk-Return Profile of All Options",
         color_continuous_scale="RdYlBu_r"
     )
-    fig1.update_layout(height=400)
+    fig1.update_layout(
+        height=400,
+        plot_bgcolor='#1a1f2e',
+        paper_bgcolor='#1a1f2e',
+        font_color='#e2e8f0',
+        title_font_color='#ffffff'
+    )
 
     # Income distribution
     fig2 = px.histogram(
@@ -685,7 +1064,13 @@ def create_analysis_charts(results):
         title="Distribution of Income Enhancement",
         labels={"count": "Number of Options"}
     )
-    fig2.update_layout(height=300)
+    fig2.update_layout(
+        height=300,
+        plot_bgcolor='#1a1f2e',
+        paper_bgcolor='#1a1f2e',
+        font_color='#e2e8f0',
+        title_font_color='#ffffff'
+    )
 
     return html.Div([
         dcc.Graph(figure=fig1),
@@ -720,8 +1105,9 @@ def create_download_section(results):
     return html.Div([
         dbc.Row([
             dbc.Col([
-                html.H5("Download Results"),
-                html.P("Export your optimization results for further analysis or client presentation."),
+                html.H5("Download Results", style={'color': '#ffffff'}),
+                html.P("Export your optimization results for further analysis or client presentation.",
+                       style={'color': '#9ca3af'}),
 
                 html.A(
                     dbc.Button([
@@ -758,36 +1144,28 @@ def update_option_details(selected_option_idx, results):
     # Metrics cards
     metrics_cards = dbc.Row([
         dbc.Col([
-            dbc.Card([
-                dbc.CardBody([
-                    html.H4(format_currency(m["delta_income"]), className="text-success"),
-                    html.P("Income Enhancement", className="card-text text-muted")
-                ])
-            ])
+            html.Div([
+                html.H4(format_currency(m["delta_income"]), className="metric-value", style={'color': '#10b981'}),
+                html.P("Income Enhancement", className="metric-label")
+            ], className="metric-card")
         ], md=3),
         dbc.Col([
-            dbc.Card([
-                dbc.CardBody([
-                    html.H4(format_currency(m["loss"]), className="text-danger"),
-                    html.P("Total Loss", className="card-text text-muted")
-                ])
-            ])
+            html.Div([
+                html.H4(format_currency(m["loss"]), className="metric-value", style={'color': '#ef4444'}),
+                html.P("Total Loss", className="metric-label")
+            ], className="metric-card")
         ], md=3),
         dbc.Col([
-            dbc.Card([
-                dbc.CardBody([
-                    html.H4(f"{m['recovery_months']:.1f} mo", className="text-info"),
-                    html.P("Recovery Period", className="card-text text-muted")
-                ])
-            ])
+            html.Div([
+                html.H4(f"{m['recovery_months']:.1f} mo", className="metric-value", style={'color': '#60a5fa'}),
+                html.P("Recovery Period", className="metric-label")
+            ], className="metric-card")
         ], md=3),
         dbc.Col([
-            dbc.Card([
-                dbc.CardBody([
-                    html.H4(f"{m['count']}", className="text-primary"),
-                    html.P("Bonds Selected", className="card-text text-muted")
-                ])
-            ])
+            html.Div([
+                html.H4(f"{m['count']}", className="metric-value", style={'color': '#3b82f6'}),
+                html.P("Bonds Selected", className="metric-label")
+            ], className="metric-card")
         ], md=3)
     ], className="mb-4")
 
@@ -802,18 +1180,29 @@ def update_option_details(selected_option_idx, results):
                 display_bonds[col] = display_bonds[col].apply(lambda x: format_currency(x))
 
         bonds_table = html.Div([
-            html.H5("Selected Bonds (Top 10)", className="mt-4 mb-3"),
+            html.H5("Selected Bonds (Top 10)", className="mt-4 mb-3", style={'color': '#ffffff'}),
             dash_table.DataTable(
                 data=display_bonds.to_dict('records'),
                 columns=[{"name": col.replace('_', ' ').title(), "id": col} for col in display_bonds.columns],
-                style_cell={'textAlign': 'left', 'padding': '8px'},
-                style_header={'backgroundColor': 'rgb(230, 230, 230)', 'fontWeight': 'bold'},
+                style_cell={
+                    'textAlign': 'left',
+                    'padding': '8px',
+                    'backgroundColor': '#1a1f2e',
+                    'color': '#e2e8f0',
+                    'border': '1px solid #374151'
+                },
+                style_header={
+                    'backgroundColor': '#2d3748',
+                    'fontWeight': 'bold',
+                    'color': '#ffffff',
+                    'border': '1px solid #4a5568'
+                },
                 page_size=10
             )
         ])
 
     return html.Div([
-        html.H4(f"Option Details: {option['option_id']}", className="mb-4"),
+        html.H4(f"Option Details: {option['option_id']}", className="mb-4", style={'color': '#ffffff'}),
         metrics_cards,
         bonds_table
     ])

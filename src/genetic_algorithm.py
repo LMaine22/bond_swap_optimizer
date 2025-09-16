@@ -15,9 +15,14 @@ import math
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
+import warnings
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
+
+# Suppress warnings for cleaner output
+warnings.filterwarnings('ignore', category=FutureWarning)
+pd.set_option('future.no_silent_downcasting', True)
 
 from src.config import (
     MIN_SWAP_SIZE_DOLLARS,
@@ -263,7 +268,7 @@ def _repair(df: pd.DataFrame, mask: np.ndarray, max_iterations: int = 10) -> Opt
                 df_cand["score"] = pd.to_numeric(df_cand["delta_income"], errors="coerce") / (
                         1.0 + pd.to_numeric(df_cand["loss"], errors="coerce").clip(lower=0.0)
                 )
-                df_cand = df_cand.replace([np.inf, -np.inf], np.nan).fillna(0.0)
+                df_cand = df_cand.replace([np.inf, -np.inf], np.nan).fillna(0.0).infer_objects(copy=False)
                 best_idx = df_cand["score"].idxmax()
                 if pd.notna(best_idx):
                     work[best_idx] = True

@@ -2,9 +2,14 @@
 from __future__ import annotations
 from dataclasses import dataclass, asdict
 from typing import Tuple, Dict, List
+import warnings
 
 import numpy as np
 import pandas as pd
+
+# Suppress warnings for cleaner output
+warnings.filterwarnings('ignore', category=FutureWarning)
+pd.set_option('future.no_silent_downcasting', True)
 
 from src.config import (
     MIN_SWAP_SIZE_DOLLARS,

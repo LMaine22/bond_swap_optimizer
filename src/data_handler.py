@@ -1,7 +1,12 @@
 # src/data_handler.py - Compatible with simplified system
 import re
+import warnings
 import pandas as pd
 import numpy as np
+
+# Suppress warnings for cleaner output
+warnings.filterwarnings('ignore', category=FutureWarning)
+pd.set_option('future.no_silent_downcasting', True)
 from src.config import (
     EXCEL_SHEET_NAME,
     ENFORCE_MIN_SELL_YIELD,
